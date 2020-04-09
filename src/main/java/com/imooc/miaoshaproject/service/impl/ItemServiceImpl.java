@@ -1,17 +1,18 @@
 package com.imooc.miaoshaproject.service.impl;
 
 import com.imooc.miaoshaproject.dao.ItemDOMapper;
+import com.imooc.miaoshaproject.dao.ItemStockDOMapper;
 import com.imooc.miaoshaproject.dataobject.ItemDO;
 import com.imooc.miaoshaproject.dataobject.ItemStockDO;
 import com.imooc.miaoshaproject.error.BusinessException;
 import com.imooc.miaoshaproject.error.EmBusinessError;
-import com.imooc.miaoshaproject.service.model.ItemModel;
-import com.imooc.miaoshaproject.service.model.PromoModel;
-import com.imooc.miaoshaproject.validator.ValidatorImpl;
-import com.imooc.miaoshaproject.dao.ItemStockDOMapper;
+import com.imooc.miaoshaproject.mq.MqProducer;
 import com.imooc.miaoshaproject.service.ItemService;
 import com.imooc.miaoshaproject.service.PromoService;
+import com.imooc.miaoshaproject.service.model.ItemModel;
+import com.imooc.miaoshaproject.service.model.PromoModel;
 import com.imooc.miaoshaproject.validator.ValidationResult;
+import com.imooc.miaoshaproject.validator.ValidatorImpl;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -25,6 +26,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class ItemServiceImpl implements ItemService {
+
+    @Autowired
+    private MqProducer mqProducer;
 
     @Autowired
     private ValidatorImpl validator;
@@ -51,7 +55,7 @@ public class ItemServiceImpl implements ItemService {
         return itemDO;
     }
     private ItemStockDO convertItemStockDOFromItemModel(ItemModel itemModel){
-        if(itemModel == null){
+        if (itemModel == null) {
             return null;
         }
         ItemStockDO itemStockDO = new ItemStockDO();
@@ -133,9 +137,15 @@ public class ItemServiceImpl implements ItemService {
         long result = redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, (-1 * amount.intValue()));
         if (result >= 0) {
             // 更新库存成功
+            boolean mqResult = mqProducer.asyncReduceStock(itemId, amount);
+            if (!mqResult) {
+                redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, amount.intValue());
+                return false;
+            }
             return true;
         } else {
             // 更新库存失败
+            redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, amount.intValue());
             return false;
         }
     }

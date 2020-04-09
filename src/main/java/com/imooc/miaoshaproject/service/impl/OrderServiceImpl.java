@@ -22,9 +22,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-/**
- * Created by hzllb on 2018/11/18.
- */
 @Service
 public class OrderServiceImpl implements OrderService {
 
@@ -61,10 +58,10 @@ public class OrderServiceImpl implements OrderService {
         // 校验活动信息
         if (promoId != null) {
             //（1）校验对应活动是否存在这个适用商品
-            if(promoId.intValue() != itemModel.getPromoModel().getId()){
+            if (promoId.intValue() != itemModel.getPromoModel().getId()) {
                 throw new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR, "活动信息不正确");
                 //（2）校验活动是否正在进行中
-            }else if(itemModel.getPromoModel().getStatus().intValue() != 2) {
+            } else if (itemModel.getPromoModel().getStatus().intValue() != 2) {
                 throw new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR, "活动信息还未开始");
             }
         }
@@ -117,13 +114,13 @@ public class OrderServiceImpl implements OrderService {
         sequenceDO.setCurrentValue(sequenceDO.getCurrentValue() + sequenceDO.getStep());
         sequenceDOMapper.updateByPrimaryKeySelective(sequenceDO);
         String sequenceStr = String.valueOf(sequence);
-        for(int i = 0; i < 6-sequenceStr.length();i++){
+        for (int i = 0; i < 6-sequenceStr.length();i++) {
             stringBuilder.append(0);
         }
         stringBuilder.append(sequenceStr);
 
 
-        //最后2位为分库分表位,暂时写死
+        // 最后2位为分库分表位,暂时写死
         stringBuilder.append("00");
 
         return stringBuilder.toString();

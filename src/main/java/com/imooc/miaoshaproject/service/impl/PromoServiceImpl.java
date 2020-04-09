@@ -68,7 +68,7 @@ public class PromoServiceImpl implements PromoService {
     }
 
     private PromoModel convertFromDataObject(PromoDO promoDO){
-        if(promoDO == null){
+        if (promoDO == null) {
             return null;
         }
         PromoModel promoModel = new PromoModel();
