@@ -14,16 +14,15 @@ import com.imooc.miaoshaproject.service.PromoService;
 import com.imooc.miaoshaproject.validator.ValidationResult;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-/**
- * Created by hzllb on 2018/11/18.
- */
 @Service
 public class ItemServiceImpl implements ItemService {
 
@@ -38,6 +37,9 @@ public class ItemServiceImpl implements ItemService {
 
     @Autowired
     private ItemStockDOMapper itemStockDOMapper;
+
+    @Autowired
+    private RedisTemplate redisTemplate;
 
     private ItemDO convertItemDOFromItemModel(ItemModel itemModel){
         if(itemModel == null){
@@ -61,16 +63,16 @@ public class ItemServiceImpl implements ItemService {
     @Override
     @Transactional
     public ItemModel createItem(ItemModel itemModel) throws BusinessException {
-        //校验入参
+        // 校验入参
         ValidationResult result = validator.validate(itemModel);
         if(result.isHasErrors()){
             throw new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR,result.getErrMsg());
         }
 
-        //转化itemmodel->dataobject
+        // 转化itemmodel->dataobject
         ItemDO itemDO = this.convertItemDOFromItemModel(itemModel);
 
-        //写入数据库
+        // 写入数据库
         itemDOMapper.insertSelective(itemDO);
         itemModel.setId(itemDO.getId());
 
@@ -78,7 +80,7 @@ public class ItemServiceImpl implements ItemService {
 
         itemStockDOMapper.insertSelective(itemStockDO);
 
-        //返回创建完成的对象
+        // 返回创建完成的对象
         return this.getItemById(itemModel.getId());
     }
 
@@ -96,17 +98,17 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public ItemModel getItemById(Integer id) {
         ItemDO itemDO = itemDOMapper.selectByPrimaryKey(id);
-        if(itemDO == null){
+        if (itemDO == null) {
             return null;
         }
-        //操作获得库存数量
+        // 操作获得库存数量
         ItemStockDO itemStockDO = itemStockDOMapper.selectByItemId(itemDO.getId());
 
 
-        //将dataobject->model
+        // 将dataobject->model
         ItemModel itemModel = convertModelFromDataObject(itemDO,itemStockDO);
 
-        //获取活动商品信息
+        // 获取活动商品信息
         PromoModel promoModel = promoService.getPromoByItemId(itemModel.getId());
         if(promoModel != null && promoModel.getStatus().intValue() != 3){
             itemModel.setPromoModel(promoModel);
@@ -115,17 +117,27 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
+    public ItemModel getItemByIdInCache(Integer id) {
+        ItemModel itemModel = (ItemModel)redisTemplate.opsForValue().get("item_validate_" + id);
+        if (itemModel == null) {
+            itemModel = getItemById(id);
+            redisTemplate.opsForValue().set("item_validate_" + id, itemModel, 10, TimeUnit.MINUTES);
+        }
+        return itemModel;
+    }
+
+    @Override
     @Transactional
     public boolean decreaseStock(Integer itemId, Integer amount) throws BusinessException {
-        int affectedRow =  itemStockDOMapper.decreaseStock(itemId,amount);
-        if(affectedRow > 0){
-            //更新库存成功
+        // int affectedRow = itemStockDOMapper.decreaseStock(itemId, amount);
+        long result = redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, (-1 * amount.intValue()));
+        if (result >= 0) {
+            // 更新库存成功
             return true;
-        }else{
-            //更新库存失败
+        } else {
+            // 更新库存失败
             return false;
         }
-
     }
 
     @Override

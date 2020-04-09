@@ -1,8 +1,5 @@
 package com.imooc.miaoshaproject.controller.viewobject;
 
-/**
- * Created by hzllb on 2018/11/11.
- */
 public class UserVO {
     private Integer id;
     private String name;

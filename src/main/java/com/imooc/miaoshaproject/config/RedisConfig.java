@@ -16,7 +16,7 @@ import org.springframework.session.data.redis.config.annotation.web.http.EnableR
 import org.springframework.stereotype.Component;
 
 /**
- * Created by hzllb on 2019/2/10.
+ * Redis配置类
  */
 @Component
 @EnableRedisHttpSession(maxInactiveIntervalInSeconds = 3600)
@@ -26,11 +26,11 @@ public class RedisConfig {
         RedisTemplate redisTemplate = new RedisTemplate();
         redisTemplate.setConnectionFactory(redisConnectionFactory);
 
-        //首先解决key的序列化方式
+        // 首先解决key的序列化方式
         StringRedisSerializer stringRedisSerializer = new StringRedisSerializer();
         redisTemplate.setKeySerializer(stringRedisSerializer);
 
-        //解决value的序列化方式
+        // 解决value的序列化方式
         Jackson2JsonRedisSerializer jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer(Object.class);
 
         ObjectMapper objectMapper =  new ObjectMapper();
