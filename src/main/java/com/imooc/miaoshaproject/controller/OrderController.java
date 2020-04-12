@@ -1,10 +1,10 @@
 package com.imooc.miaoshaproject.controller;
 
-import com.imooc.miaoshaproject.service.OrderService;
 import com.imooc.miaoshaproject.error.BusinessException;
 import com.imooc.miaoshaproject.error.EmBusinessError;
+import com.imooc.miaoshaproject.mq.MqProducer;
 import com.imooc.miaoshaproject.response.CommonReturnType;
-import com.imooc.miaoshaproject.service.model.OrderModel;
+import com.imooc.miaoshaproject.service.OrderService;
 import com.imooc.miaoshaproject.service.model.UserModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -29,6 +29,9 @@ public class OrderController extends BaseController {
 
     @Autowired
     private RedisTemplate redisTemplate;
+
+    @Autowired
+    private MqProducer mqProducer;
 
     /**
      * 封装下单请求
@@ -58,7 +61,12 @@ public class OrderController extends BaseController {
 
 //        UserModel userModel = (UserModel)httpServletRequest.getSession().getAttribute("LOGIN_USER");
 
-        OrderModel orderModel = orderService.createOrder(userModel.getId(),itemId,promoId,amount);
+//        OrderModel orderModel = orderService.createOrder(userModel.getId(),itemId,promoId,amount);
+
+        // 通过MQProducer发送异步事务型消息
+        if (!mqProducer.transactionAsyncReduceStock(userModel.getId(), itemId, promoId, amount)) {
+            throw new BusinessException(EmBusinessError.UNKNOWN_ERROR, "下单失败");
+        }
 
         return CommonReturnType.create(null);
     }

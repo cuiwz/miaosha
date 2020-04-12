@@ -37,13 +37,30 @@ public interface ItemService {
     ItemModel getItemByIdInCache(Integer id);
 
     /**
-     * 库存扣减
+     * 缓存中库存扣减
      * @param itemId
      * @param amount
      * @return
      * @throws BusinessException
      */
-    boolean decreaseStock(Integer itemId,Integer amount)throws BusinessException;
+    boolean decreaseStock(Integer itemId, Integer amount) throws BusinessException;
+
+    /**
+     * 缓存中库存回补
+     * @param itemId
+     * @param amount
+     * @return
+     * @throws BusinessException
+     */
+    boolean increaseStock(Integer itemId, Integer amount) throws BusinessException;
+
+    /**
+     * 异步更新库存
+     * @param itemId
+     * @param amount
+     * @return
+     */
+    boolean asyncDecreaseStock(Integer itemId, Integer amount);
 
     /**
      * 商品销量增加
@@ -51,6 +68,6 @@ public interface ItemService {
      * @param amount
      * @throws BusinessException
      */
-    void increaseSales(Integer itemId,Integer amount)throws BusinessException;
+    void increaseSales(Integer itemId, Integer amount) throws BusinessException;
 
 }

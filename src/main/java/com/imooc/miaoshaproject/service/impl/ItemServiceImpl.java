@@ -46,7 +46,7 @@ public class ItemServiceImpl implements ItemService {
     private RedisTemplate redisTemplate;
 
     private ItemDO convertItemDOFromItemModel(ItemModel itemModel){
-        if(itemModel == null){
+        if (itemModel == null) {
             return null;
         }
         ItemDO itemDO = new ItemDO();
@@ -54,6 +54,7 @@ public class ItemServiceImpl implements ItemService {
         itemDO.setPrice(itemModel.getPrice().doubleValue());
         return itemDO;
     }
+
     private ItemStockDO convertItemStockDOFromItemModel(ItemModel itemModel){
         if (itemModel == null) {
             return null;
@@ -137,17 +138,37 @@ public class ItemServiceImpl implements ItemService {
         long result = redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, (-1 * amount.intValue()));
         if (result >= 0) {
             // 更新库存成功
-            boolean mqResult = mqProducer.asyncReduceStock(itemId, amount);
-            if (!mqResult) {
-                redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, amount.intValue());
-                return false;
-            }
+//            boolean mqResult = mqProducer.asyncReduceStock(itemId, amount);
+//            if (!mqResult) {
+//                redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, amount.intValue());
+//                return false;
+//            }
             return true;
         } else {
-            // 更新库存失败
-            redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, amount.intValue());
+            // 更新库存失败，回补缓存中库存
+            increaseStock(itemId, amount);
             return false;
         }
+    }
+
+    /**
+     * 回补缓存里的库存
+     * @param itemId
+     * @param amount
+     * @return
+     * @throws BusinessException
+     */
+    @Override
+    public boolean increaseStock(Integer itemId, Integer amount) throws BusinessException {
+        // 不考虑Redis更新失败
+        redisTemplate.opsForValue().increment("promo_item_stock_" + itemId, amount.intValue());
+        return true;
+    }
+
+    @Override
+    public boolean asyncDecreaseStock(Integer itemId, Integer amount) {
+        boolean mqResult = mqProducer.asyncReduceStock(itemId, amount);
+        return mqResult;
     }
 
     @Override
