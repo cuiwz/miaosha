@@ -70,4 +70,11 @@ public interface ItemService {
      */
     void increaseSales(Integer itemId, Integer amount) throws BusinessException;
 
+    /**
+     * 初始化库存流水
+     * @param itemId
+     * @param amount
+     */
+    String initStockLog(Integer itemId, Integer amount);
+
 }

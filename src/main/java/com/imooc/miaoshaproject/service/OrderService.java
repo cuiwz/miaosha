@@ -14,6 +14,6 @@ public interface OrderService {
      * @return
      * @throws BusinessException
      */
-    OrderModel createOrder(Integer userId,Integer itemId,Integer promoId,Integer amount) throws BusinessException;
+    OrderModel createOrder(Integer userId, Integer itemId, Integer promoId, Integer amount, String stockLogId) throws BusinessException;
 
 }

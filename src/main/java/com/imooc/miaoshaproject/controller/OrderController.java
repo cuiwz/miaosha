@@ -4,6 +4,7 @@ import com.imooc.miaoshaproject.error.BusinessException;
 import com.imooc.miaoshaproject.error.EmBusinessError;
 import com.imooc.miaoshaproject.mq.MqProducer;
 import com.imooc.miaoshaproject.response.CommonReturnType;
+import com.imooc.miaoshaproject.service.ItemService;
 import com.imooc.miaoshaproject.service.OrderService;
 import com.imooc.miaoshaproject.service.model.UserModel;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ public class OrderController extends BaseController {
 
     @Autowired
     private MqProducer mqProducer;
+
+    @Autowired
+    private ItemService itemService;
 
     /**
      * 封装下单请求
@@ -63,8 +67,16 @@ public class OrderController extends BaseController {
 
 //        OrderModel orderModel = orderService.createOrder(userModel.getId(),itemId,promoId,amount);
 
+        // 判断库存是否售罄，若对应的售罄key存在，则直接返回下单失败
+        if (redisTemplate.hasKey("promo_item_stock_invalid_" + itemId)) {
+            throw new BusinessException(EmBusinessError.STOCK_NOT_ENOUGH);
+        }
+
+        // 加入库存流水初始状态
+        String stockLogId = itemService.initStockLog(itemId, amount);
+
         // 通过MQProducer发送异步事务型消息
-        if (!mqProducer.transactionAsyncReduceStock(userModel.getId(), itemId, promoId, amount)) {
+        if (!mqProducer.transactionAsyncReduceStock(userModel.getId(), itemId, promoId, amount, stockLogId)) {
             throw new BusinessException(EmBusinessError.UNKNOWN_ERROR, "下单失败");
         }
 

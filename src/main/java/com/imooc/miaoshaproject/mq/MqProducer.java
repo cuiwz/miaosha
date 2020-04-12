@@ -1,6 +1,8 @@
 package com.imooc.miaoshaproject.mq;
 
 import com.alibaba.fastjson.JSON;
+import com.imooc.miaoshaproject.dao.StockLogDOMapper;
+import com.imooc.miaoshaproject.dataobject.StockLogDO;
 import com.imooc.miaoshaproject.error.BusinessException;
 import com.imooc.miaoshaproject.service.OrderService;
 import org.apache.rocketmq.client.exception.MQBrokerException;
@@ -38,6 +40,9 @@ public class MqProducer {
     @Autowired
     private OrderService orderService;
 
+    @Autowired
+    private StockLogDOMapper stockLogDOMapper;
+
     @PostConstruct
     public void init() throws MQClientException {
         // MQ Producer初始化
@@ -60,15 +65,30 @@ public class MqProducer {
                 Integer itemId = (Integer) ((Map)o).get("itemId");
                 Integer promoId = (Integer) ((Map)o).get("promoId");
                 Integer amount = (Integer) ((Map)o).get("amount");
+                String stockLogId = (String) ((Map)o).get("stockLogId");
+                /**
+                 * UNKNOWN出现的三种情况
+                 * (1) createOrder操作成功，但是在返回COMMIT_MESSAGE之后发生异常，ROLLBACK_MESSAGE发送失败
+                 * (2) createOrder操作失败，ROLLBACK_MESSAGE发送失败
+                 * (3) createOrder没执行完，就发生checkLocalTransaction回调
+                 */
                 try {
-                    orderService.createOrder(userId, itemId, promoId, amount);
+                    orderService.createOrder(userId, itemId, promoId, amount, stockLogId);
                 } catch (BusinessException e) {
                     e.printStackTrace();
+                    // 设置对应的stockLog为回滚状态
+                    StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
+                    stockLogDO.setStatus(3);
+                    stockLogDOMapper.updateByPrimaryKeySelective(stockLogDO);
                     return LocalTransactionState.ROLLBACK_MESSAGE;
                 }
                 return LocalTransactionState.COMMIT_MESSAGE;
             }
 
+            /**
+             * 当createOrder()时间很长时，没有返回ROLLBACK_MESSAGE/COMMIT_MESSAGE
+             * 就会发起checkLocalTransaction()回调函数
+             */
             @Override
             public LocalTransactionState checkLocalTransaction(MessageExt messageExt) {
                 // 根据是否扣减库存成功，来判断要返回COMMIT/ROLLBACK/UNKNOWN
@@ -77,8 +97,17 @@ public class MqProducer {
                 Integer itemId = (Integer)map.get("itemId");
                 Integer amount = (Integer)map.get("amount");
                 // 根据订单流水来判断交易是否真正完成
-
-                return null;
+                String stockLogId = (String)map.get("stockLogId");
+                StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
+                if (stockLogDO == null) {
+                    return LocalTransactionState.UNKNOW;
+                }
+                if (stockLogDO.getStatus().intValue() == 2) {
+                    return LocalTransactionState.COMMIT_MESSAGE;
+                } else if (stockLogDO.getStatus().intValue() == 1) {
+                    return LocalTransactionState.UNKNOW;
+                }
+                return LocalTransactionState.ROLLBACK_MESSAGE;
             }
         });
     }
@@ -89,16 +118,18 @@ public class MqProducer {
      * @param amount
      * @return
      */
-    public boolean transactionAsyncReduceStock(Integer userId, Integer itemId, Integer promoId, Integer amount) {
+    public boolean transactionAsyncReduceStock(Integer userId, Integer itemId, Integer promoId, Integer amount, String stockLogId) {
         Map<String, Object> bodyMap = new HashMap<>();
         bodyMap.put("itemId", itemId);
         bodyMap.put("amount", amount);
+        bodyMap.put("stockLogId", stockLogId);
 
         Map<String, Object> argsMap = new HashMap<>();
         argsMap.put("itemId", itemId);
         argsMap.put("amount", amount);
         argsMap.put("userId", userId);
         argsMap.put("promoId", promoId);
+        argsMap.put("stockLogId", stockLogId);
         Message message =new Message(topicName, "increase",
                 JSON.toJSON(bodyMap).toString().getBytes(Charset.forName("UTF-8")));
 
